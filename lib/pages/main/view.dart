@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/floating_navigation_bar.dart';
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -416,6 +417,18 @@ class _MainAppState extends PopScopeState<MainApp>
             semanticLabel: '搜索',
           ),
           onPressed: () => Get.toNamed('/search'),
+        ),
+        IconButton(
+          tooltip: '观看记录',
+          icon: const Icon(
+            CustomIcons.history,
+            semanticLabel: '观看记录',
+          ),
+          onPressed: () {
+            if (_mainController.accountService.isLogin.value) {
+              Get.toNamed('/history');
+            }
+          },
         ),
       ],
     );
