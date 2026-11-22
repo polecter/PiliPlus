@@ -290,7 +290,7 @@ class _MainAppState extends PopScopeState<MainApp>
       }
       return Obx(
         () => NavigationRail(
-          groupAlignment: 0.5,
+          groupAlignment: 1.0,
           labelType: _mainController.hideSideBarLabel ? .none : .selected,
           leading: userAndSearchVertical(),
           backgroundColor: Colors.transparent,
