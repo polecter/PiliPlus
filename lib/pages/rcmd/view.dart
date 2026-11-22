@@ -45,7 +45,7 @@ class _RcmdPageState extends State<RcmdPage>
             SliverPadding(
               padding: const .only(top: Style.cardSpace, bottom: 100),
               sliver: Obx(
-                () => _buildBody(colorScheme, controller.loadingState.value),
+                () => _buildBody(controller.loadingState.value),
               ),
             ),
           ],
@@ -81,76 +81,70 @@ class _RcmdPageState extends State<RcmdPage>
     mainAxisExtent: MediaQuery.textScalerOf(context).scale(90),
   );
 
-  Widget _buildBody(
-    ColorScheme colorScheme,
-    LoadingState<List<dynamic>?> loadingState,
-  ) {
+  Widget _buildBody(LoadingState<List<dynamic>?> loadingState) {
     return switch (loadingState) {
       Loading() => _buildSkeleton,
       Success(:final response) =>
         response != null && response.isNotEmpty
-            ? SliverGrid.builder(
-                gridDelegate: gridDelegate,
-                itemBuilder: (context, index) {
-                  if (index == response.length - 1) {
-                    controller.onLoadMore();
-                  }
-                  if (controller.lastRefreshAt != null) {
-                    if (controller.lastRefreshAt == index) {
-                      return GestureDetector(
-                        onTap: () => controller
-                          ..animateToTop()
-                          ..onRefresh(),
-                        child: Card(
-                          child: Container(
-                            alignment: Alignment.center,
-                            padding: const .symmetric(horizontal: 10),
-                            child: Text(
-                              '上次看到这里\n点击刷新',
-                              textAlign: .center,
-                              style: TextStyle(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }
-                    final actualIndex = index > controller.lastRefreshAt!
-                        ? index - 1
-                        : index;
-                    return VideoCardV(
-                      videoItem: response[actualIndex],
-                      onRemove: () {
-                        if (controller.lastRefreshAt != null &&
-                            actualIndex < controller.lastRefreshAt!) {
-                          controller.lastRefreshAt =
-                              controller.lastRefreshAt! - 1;
-                        }
-                        controller.loadingState
-                          ..value.data!.removeAt(actualIndex)
-                          ..refresh();
-                      },
-                    );
-                  } else {
-                    return VideoCardV(
-                      videoItem: response[index],
-                      onRemove: () => controller.loadingState
-                        ..value.data!.removeAt(index)
-                        ..refresh(),
-                    );
-                  }
-                },
-                itemCount: controller.lastRefreshAt != null
-                    ? response.length + 1
-                    : response.length,
-              )
+            ? _buildRecommendations(response)
             : HttpError(onReload: controller.onReload),
       Error(:final errMsg) => HttpError(
         errMsg: errMsg,
         onReload: controller.onReload,
       ),
     };
+  }
+
+  Widget _buildRecommendations(List<dynamic> response) {
+    Widget buildGrid(int start, int count) => SliverGrid.builder(
+      gridDelegate: gridDelegate,
+      itemCount: count,
+      itemBuilder: (context, index) {
+        final actualIndex = start + index;
+        if (actualIndex == response.length - 1) {
+          controller.onLoadMore();
+        }
+        return VideoCardV(
+          videoItem: response[actualIndex],
+          onRemove: () {
+            if (controller.lastRefreshAt case final boundary?
+                when actualIndex < boundary) {
+              controller.lastRefreshAt = boundary - 1;
+            }
+            controller.loadingState
+              ..value.data!.removeAt(actualIndex)
+              ..refresh();
+          },
+        );
+      },
+    );
+
+    final boundary = controller.lastRefreshAt;
+    if (boundary == null || boundary < 0 || boundary > response.length) {
+      return buildGrid(0, response.length);
+    }
+
+    return SliverMainAxisGroup(
+      slivers: [
+        if (boundary > 0) buildGrid(0, boundary),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const .symmetric(vertical: Style.cardSpace),
+            child: Center(
+              child: TextButton.icon(
+                onPressed: () => controller
+                  ..animateToTop()
+                  ..onRefresh(),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('上次看到这里，点击刷新'),
+              ),
+            ),
+          ),
+        ),
+        if (boundary < response.length)
+          buildGrid(boundary, response.length - boundary),
+      ],
+    );
   }
 
   Widget get _buildSkeleton => SliverGrid(
