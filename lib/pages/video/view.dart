@@ -54,6 +54,7 @@ import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/plugin/pl_player/view/view.dart';
 import 'package:PiliPlus/services/service_locator.dart';
+import 'package:PiliPlus/services/in_app_pip_service.dart';
 import 'package:PiliPlus/services/shutdown_timer_service.dart'
     show shutdownTimerService;
 import 'package:PiliPlus/utils/accounts.dart';
@@ -68,6 +69,7 @@ import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, clampDouble;
@@ -91,6 +93,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   late final VideoDetailController videoDetailController;
   late final VideoReplyController _videoReplyController;
   PlPlayerController? plPlayerController;
+  bool _handedOffToPip = false;
+  bool _manualPipRequested = false;
 
   // intro ctr
   late final CommonIntroController introController;
@@ -146,6 +150,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   @override
   void initState() {
     super.initState();
+
+    // A newly opened video takes ownership of the global player from a mini window.
+    InAppPipService.close();
 
     videoDetailController = Get.put(VideoDetailController(), tag: heroTag);
 
@@ -355,7 +362,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       showSystemBar();
     }
 
-    if (!videoDetailController.plPlayerController.isCloseAll) {
+    if (!_handedOffToPip && !videoDetailController.plPlayerController.isCloseAll) {
       videoPlayerServiceHandler?.onVideoDetailDispose(heroTag);
       if (plPlayerController != null) {
         videoDetailController.makeHeartBeat();
@@ -1166,6 +1173,11 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         onTap: introController.viewLater,
         child: const Text('稍后再看'),
       ),
+      if (PlatformUtils.isMobile)
+        PopupMenuItem(
+          onTap: _requestInAppPip,
+          child: const Text('应用内小窗播放'),
+        ),
       if (videoDetailController.epId == null)
         PopupMenuItem(
           onTap: () => videoDetailController.showNoteList(context),
@@ -1200,6 +1212,54 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     ],
   );
 
+  Future<void> _requestInAppPip() async {
+    final player = plPlayerController;
+    if (player?.videoController == null) {
+      SmartDialog.showToast('请先开始播放视频');
+      return;
+    }
+    if (player!.isFullScreen.value) {
+      await player.triggerFullScreen(status: false);
+    }
+    if (!player.playerStatus.isPlaying) {
+      await player.play();
+    }
+    if (!mounted) return;
+    _manualPipRequested = true;
+    Get.back();
+  }
+
+  void _onPlayerPop(bool didPop, Object? result) {
+    if (didPop && _tryEnterInAppPip()) return;
+    videoDetailController.plPlayerController.onPopInvokedWithResult(
+      didPop,
+      result,
+    );
+  }
+
+  bool _tryEnterInAppPip() {
+    final manual = _manualPipRequested;
+    _manualPipRequested = false;
+    final player = plPlayerController;
+    if (!PlatformUtils.isMobile ||
+        (!manual && !Pref.enableInAppPip) ||
+        player?.videoController == null ||
+        !player!.playerStatus.isPlaying ||
+        player.isDesktopPip ||
+        Get.previousRoute == '/videoV' ||
+        Get.previousRoute == '/liveRoom') {
+      return false;
+    }
+    _handedOffToPip = true;
+    PlPlayerController.setPlayCallBack(null);
+    InAppPipService.show(
+      context,
+      player: player,
+      arguments: Map<String, dynamic>.from(videoDetailController.args),
+    );
+    return true;
+  }
+
   Widget plPlayer({
     required double width,
     required double height,
@@ -1210,8 +1270,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         !isFullScreen &&
         !videoDetailController.plPlayerController.isDesktopPip &&
         (videoDetailController.horizontalScreen || isPortrait),
-    onPopInvokedWithResult:
-        videoDetailController.plPlayerController.onPopInvokedWithResult,
+    onPopInvokedWithResult: _onPlayerPop,
     child: Obx(
       () =>
           !videoDetailController.videoState.value ||

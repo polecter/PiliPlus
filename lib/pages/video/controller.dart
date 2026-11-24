@@ -754,6 +754,12 @@ class VideoDetailController extends GetxController
     return null;
   }
 
+  // 剧集加速 (thread-ripper 2026.10.8.1): episodes go through the proxy unless
+  // switched off; DRM and preview-only episodes never do.
+  bool get _ripperEpisodeAllowed =>
+      videoType != VideoType.pgc ||
+      (Pref.threadRipperEpisodeEnabled && !data.isDrm && !data.isPreview);
+
   Future<void> playerInit({
     bool? autoplay,
     bool autoFullScreenFlag = false,
@@ -772,6 +778,22 @@ class VideoDetailController extends GetxController
           : NetworkSource(
               videoSource: videoUrl!,
               audioSource: audioUrl,
+              videoCandidates:
+                  data.dash != null &&
+                      _ripperEpisodeAllowed &&
+                      videoUrl == VideoUtils.getCdnUrl(firstVideo.playUrls)
+                  ? firstVideo.playUrls.toList()
+                  : null,
+              audioCandidates: data.dash?.audio
+                  ?.where(
+                    (item) =>
+                        item.id == currentAudioQa?.code &&
+                        audioUrl ==
+                            VideoUtils.getCdnUrl(item.playUrls, isAudio: true),
+                  )
+                  .firstOrNull
+                  ?.playUrls
+                  .toList(),
             ),
       seekTo: seek,
       duration: data.timeLength == null
@@ -795,6 +817,8 @@ class VideoDetailController extends GetxController
       volume: volume,
       autoFullScreenFlag: autoFullScreenFlag,
       rotate: _rotate,
+      playUrlFetchedAt: isFileSource ? null : _playUrlFetchedAt,
+      refreshPlayUrl: isFileSource ? null : _refreshPlayUrl,
     );
 
     if (isClosed) return;
@@ -814,6 +838,17 @@ class VideoDetailController extends GetxController
     }
 
     defaultST = null;
+  }
+
+  // When the playurls in [data] were fetched; null for ones typed in.
+  DateTime? _playUrlFetchedAt;
+
+  // The player calls this once the playurls have expired: 重载视频 at the
+  // position it stopped at.
+  Future<void> _refreshPlayUrl(Duration position) {
+    if (isClosed) return Future.value();
+    playedTime = position;
+    return queryVideoUrl(fromReset: true);
   }
 
   bool isQuerying = false;
@@ -898,6 +933,7 @@ class VideoDetailController extends GetxController
 
     if (result case Success(:final response)) {
       data = response;
+      _playUrlFetchedAt = DateTime.now();
       if (data.dash != null) await _supplementVideoQualities();
 
       languages.value = data.language?.items;
@@ -1314,6 +1350,7 @@ class VideoDetailController extends GetxController
 
     playedTime = null;
     defaultST = null;
+    _playUrlFetchedAt = null;
     videoUrl = null;
     audioUrl = null;
 
@@ -1603,6 +1640,7 @@ class VideoDetailController extends GetxController
               Get.back();
               this.videoUrl = videoUrl;
               this.audioUrl = audioUrl;
+              _playUrlFetchedAt = null;
               playerInit();
             },
             child: const Text('确定'),
