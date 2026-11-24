@@ -9,6 +9,7 @@ import 'package:PiliPlus/models/common/dynamic/dynamic_badge_mode.dart';
 import 'package:PiliPlus/models/common/dynamic/dynamics_type.dart';
 import 'package:PiliPlus/models/common/dynamic/up_panel_position.dart';
 import 'package:PiliPlus/models/common/follow_order_type.dart';
+import 'package:PiliPlus/models/common/mine_shortcut_type.dart';
 import 'package:PiliPlus/models/common/member/tab_type.dart';
 import 'package:PiliPlus/models/common/mine_tab_type.dart';
 import 'package:PiliPlus/models/common/msg/msg_unread_type.dart';
@@ -281,6 +282,40 @@ abstract final class Pref {
       return CDNService.values.byName(cdnName);
     }
     return CDNService.backupUrl;
+  }
+
+  static bool get threadRipperEnabled =>
+      _setting.get(SettingBoxKey.threadRipperEnabled, defaultValue: false);
+  // 剧集加速 (upstream 2026.10.8.1): on unless switched off.
+  static bool get threadRipperEpisodeEnabled => _setting.get(
+    SettingBoxKey.threadRipperEpisodeEnabled,
+    defaultValue: true,
+  );
+  // Mainland nodes by default, as upstream. The switch picks the CDN pool,
+  // not where the viewer is: upstream recommends mainland nodes for viewers
+  // abroad too, because overseas edges don't cache cold videos and the
+  // multi-thread download makes up for the long route. Overseas nodes are
+  // only for viewers whose route to mainland is poor. Automatic thread count
+  // as upstream.
+  static bool get threadRipperOverseas =>
+      _setting.get(SettingBoxKey.threadRipperOverseas, defaultValue: false);
+  static bool get threadRipperAutoConcurrency => _setting.get(
+    SettingBoxKey.threadRipperAutoConcurrency,
+    defaultValue: true,
+  );
+  static List<String> get threadRipperCustomHosts => List<String>.from(
+    _setting.get(
+      SettingBoxKey.threadRipperCustomHosts,
+      defaultValue: <String>[],
+    ),
+  );
+  static const threadRipperConcurrencyValues = [4, 8, 16, 32, 64, 128];
+  static int get threadRipperConcurrency {
+    final value = _setting.get(
+      SettingBoxKey.threadRipperConcurrency,
+      defaultValue: 8,
+    );
+    return threadRipperConcurrencyValues.contains(value) ? value as int : 8;
   }
 
   static String get banWordForRecommend =>
@@ -1100,11 +1135,29 @@ abstract final class Pref {
   static bool get enableEmoteTooltip =>
       _setting.get(SettingBoxKey.enableEmoteTooltip, defaultValue: false);
 
-  static Set<MineTabType> get mineTabs =>
-      (_setting.get(SettingBoxKey.mineTabs) as List?)
-          ?.map<MineTabType>((index) => .values[index])
-          .toSet() ??
-      MineTabType.kDefault;
+  static Set<MineTabType> get mineTabs {
+    final saved = _setting.get(SettingBoxKey.mineTabs);
+    if (saved is! List) return MineTabType.kDefault;
+    return saved
+        .whereType<int>()
+        .where((index) => index >= 0 && index < MineTabType.values.length)
+        .map((index) => MineTabType.values[index])
+        .toSet();
+  }
+
+  static List<MineShortcutType> get mineShortcuts {
+    final saved = _setting.get(SettingBoxKey.mineShortcuts);
+    if (saved is! List) return MineShortcutType.kDefault;
+    return saved
+        .whereType<int>()
+        .where((index) => index >= 0 && index < MineShortcutType.values.length)
+        .map((index) => MineShortcutType.values[index])
+        .toSet()
+        .toList();
+  }
+
+  static bool get enableInAppPip =>
+      _setting.get(SettingBoxKey.enableInAppPip, defaultValue: false);
 
   static bool get blockAtOnlyReply =>
       _setting.get(SettingBoxKey.blockAtOnlyReply, defaultValue: false);
