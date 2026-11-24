@@ -18,6 +18,7 @@ import 'package:PiliPlus/models/common/dynamic/up_panel_position.dart';
 import 'package:PiliPlus/models/common/home_tab_type.dart';
 import 'package:PiliPlus/models/common/member/tab_type.dart';
 import 'package:PiliPlus/models/common/mine_tab_type.dart';
+import 'package:PiliPlus/models/common/mine_shortcut_type.dart';
 import 'package:PiliPlus/models/common/msg/msg_unread_type.dart';
 import 'package:PiliPlus/models/common/nav_bar_config.dart';
 import 'package:PiliPlus/models/common/theme/theme_color_type.dart';
@@ -368,6 +369,14 @@ List<SettingsModel> get styleSettings => [
     title: '应用主题',
     getSubtitle: () => '当前主题：${Pref.dynamicColor ? '动态取色' : '指定颜色'}',
     getTrailing: _themeTrailing,
+  ),
+  NormalModel(
+    onTap: _showMineShortcutsDialog,
+    title: '我的页快捷入口',
+    leading: const Icon(Icons.star_border_rounded),
+    getSubtitle: () => Pref.mineShortcuts.isEmpty
+        ? '当前全部隐藏'
+        : '当前顺序：${Pref.mineShortcuts.map((item) => item.label).join('、')}',
   ),
   NormalModel(
     onTap: _showMineTabsDialog,
@@ -917,6 +926,29 @@ void _onHorizontalScreenChanged(bool value) {
   } else {
     portraitUpMode();
   }
+}
+
+Future<void> _showMineShortcutsDialog(
+  BuildContext context,
+  VoidCallback setState,
+) async {
+  final result = await showDialog<List<MineShortcutType>>(
+    context: context,
+    builder: (context) => OrderedMultiSelectDialog<MineShortcutType>(
+      title: const Text('我的页快捷入口'),
+      initValues: Pref.mineShortcuts,
+      values: {for (final item in MineShortcutType.values) item: item.label},
+    ),
+  );
+  if (result == null) return;
+  await GStorage.setting.put(
+    SettingBoxKey.mineShortcuts,
+    result.map((item) => item.index).toList(),
+  );
+  if (Get.isRegistered<MineController>()) {
+    Get.find<MineController>().shortcuts.assignAll(result);
+  }
+  setState();
 }
 
 Future<void> _showMineTabsDialog(

@@ -394,6 +394,14 @@ List<SettingsModel> get playSettings => [
         .whenComplete(setState),
   ),
   if (PlatformUtils.isMobile)
+    const SwitchModel(
+      title: '返回视频列表时使用应用内小窗',
+      subtitle: '播放中返回可在应用内继续观看；视频菜单也可手动开启',
+      leading: Icon(Icons.picture_in_picture_alt_outlined),
+      setKey: SettingBoxKey.enableInAppPip,
+      defaultVal: false,
+    ),
+  if (PlatformUtils.isMobile)
     SwitchModel(
       title: '后台音频服务',
       subtitle: '避免画中画没有播放暂停功能',
