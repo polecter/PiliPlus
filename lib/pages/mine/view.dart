@@ -94,7 +94,7 @@ class _MediaPageState extends CommonPageState<MinePage>
                   physics: const AlwaysScrollableScrollPhysics(),
                   children: [
                     _buildUserInfo(theme, secondary),
-                    _buildActions(secondary),
+                    Obx(() => _buildActions(secondary)),
                     for (final tab in controller.mineTabs)
                       switch (tab) {
                         .favorite => Obx(_buildFav),
@@ -115,11 +115,11 @@ class _MediaPageState extends CommonPageState<MinePage>
   Widget _buildActions(Color primary) {
     return Row(
       mainAxisAlignment: .spaceEvenly,
-      children: controller.list
+      children: controller.shortcuts
           .map(
             (e) => Flexible(
               child: InkWell(
-                onTap: e.onTap,
+                onTap: () => controller.onShortcutTap(e),
                 borderRadius: Style.mdRadius,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 80),
@@ -132,7 +132,7 @@ class _MediaPageState extends CommonPageState<MinePage>
                       children: [
                         Icon(e.icon, color: primary),
                         Text(
-                          e.title,
+                          e.label,
                           style: const TextStyle(fontSize: 13),
                         ),
                       ],

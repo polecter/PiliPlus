@@ -1,10 +1,10 @@
-import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/http/fav.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/models/common/account_type.dart';
 import 'package:PiliPlus/models/common/later_view_type.dart';
 import 'package:PiliPlus/models/common/mine_tab_type.dart';
+import 'package:PiliPlus/models/common/mine_shortcut_type.dart';
 import 'package:PiliPlus/models/common/theme/theme_type.dart';
 import 'package:PiliPlus/models/user/info.dart';
 import 'package:PiliPlus/models/user/stat.dart';
@@ -47,40 +47,19 @@ class MineController extends GetxController with AccountMixin {
   static RxBool anonymity =
       (Accounts.account.isNotEmpty && !Accounts.heartbeat.isLogin).obs;
 
-  late final list = <({IconData icon, String title, VoidCallback onTap})>[
-    (
-      icon: CustomIcons.folderDownloadOutline,
-      title: '离线缓存',
-      onTap: () => Get.toNamed('/download'),
-    ),
-    (
-      icon: CustomIcons.history,
-      title: '观看记录',
-      onTap: () {
-        if (isLogin) {
-          Get.toNamed('/history');
-        }
-      },
-    ),
-    (
-      icon: CustomIcons.subscriptions_outlined,
-      title: '我的订阅',
-      onTap: () {
-        if (isLogin) {
-          Get.toNamed('/subscription');
-        }
-      },
-    ),
-    (
-      icon: CustomIcons.watch_later_outlined,
-      title: '稍后再看',
-      onTap: () {
-        if (isLogin) {
-          Get.toNamed('/later');
-        }
-      },
-    ),
-  ];
+  late final RxList<MineShortcutType> shortcuts = Pref.mineShortcuts.obs;
+
+  void onShortcutTap(MineShortcutType shortcut) {
+    if (!isLogin && shortcut != MineShortcutType.download) return;
+    final route = switch (shortcut) {
+      MineShortcutType.favorite => '/fav',
+      MineShortcutType.download => '/download',
+      MineShortcutType.history => '/history',
+      MineShortcutType.subscription => '/subscription',
+      MineShortcutType.later => '/later',
+    };
+    Get.toNamed(route);
+  }
 
   late final Set<MineTabType> mineTabs;
   FavCtr? favCtr;
