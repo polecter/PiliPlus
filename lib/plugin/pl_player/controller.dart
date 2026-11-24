@@ -29,6 +29,8 @@ import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/models/video_fit_type.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/danmaku_options.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
+import 'package:PiliPlus/services/thread_ripper/auto_concurrency.dart';
+import 'package:PiliPlus/services/thread_ripper/range_proxy.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
@@ -723,6 +725,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     Volume? volume,
     bool autoFullScreenFlag = false,
     int? rotate,
+    // When the playurls in [dataSource] were fetched, and how to fetch new
+    // ones and reopen at a position; see [_refreshPlayUrlIfStale].
+    DateTime? playUrlFetchedAt,
+    Future<void> Function(Duration position)? refreshPlayUrl,
   }) async {
     try {
       _processing = true;
@@ -732,6 +738,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       this.height = height;
       this.dataSource = dataSource;
       _autoPlay = autoplay;
+      _playUrlFetchedAt = isLive ? null : playUrlFetchedAt;
+      _refreshPlayUrl = refreshPlayUrl;
+      _playUrlRefused = false;
+      _refreshingPlayUrl = false;
       // 初始化数据加载状态
       dataStatus.value = DataStatus.loading;
       // 初始化全屏方向
@@ -785,6 +795,65 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       }
     } finally {
       _processing = false;
+    }
+  }
+
+  RipperRangeProxy? _ripperProxy;
+  final _ripperAutoConcurrency = RipperAutoConcurrency();
+  int _ripperGeneration = 0;
+  // A seek or (re)open restarts playback. Its buffering is not a download
+  // stall (upstream ignores waiting while video.seeking); cleared once
+  // buffering ends.
+  bool _ripperRestarting = false;
+
+  // Playurls carry a `deadline=` two hours after they are fetched; the CDN
+  // then refuses every new request for them. mpv cannot reconnect or seek in
+  // such a track and takes the error as its end: the picture freezes while
+  // the audio plays on, or the other way round. Fetch new ones first.
+  static const _playUrlLifetime = Duration(minutes: 110);
+  DateTime? _playUrlFetchedAt;
+  Future<void> Function(Duration position)? _refreshPlayUrl;
+  bool _playUrlRefused = false;
+  bool _refreshingPlayUrl = false;
+
+  /// Fetches new playurls and reopens at [position] when the current ones
+  /// have expired or the CDN refused them. Returns whether a refresh is
+  /// pending, in which case the caller must not play the old ones.
+  ///
+  /// Paused, the position listeners keep [position] until the reopen. Left
+  /// playing, the buffer covers the fetch and the reopen continues from where
+  /// playback has got to by then.
+  bool _refreshPlayUrlIfStale(Duration position, {bool pause = true}) {
+    final fetchedAt = _playUrlFetchedAt;
+    final refresh = _refreshPlayUrl;
+    if (fetchedAt == null || refresh == null) return false;
+    if (_refreshingPlayUrl) return true;
+    if (!_playUrlRefused &&
+        DateTime.now().difference(fetchedAt) < _playUrlLifetime) {
+      return false;
+    }
+    _refreshingPlayUrl = true;
+    if (pause) _videoPlayerController?.pause();
+    SmartDialog.showToast('播放地址已过期，正在刷新');
+    refresh(position).whenComplete(() => _refreshingPlayUrl = false).ignore();
+    return true;
+  }
+
+  void _onPlayUrlRefused() {
+    final fetchedAt = _playUrlFetchedAt;
+    // URLs fetched minutes ago have not expired, and new ones would only be
+    // refused again.
+    if (fetchedAt == null ||
+        DateTime.now().difference(fetchedAt) < const Duration(minutes: 10)) {
+      return;
+    }
+    _playUrlRefused = true;
+    // When paused, the next play() refreshes.
+    if (playerStatus.isPlaying) {
+      _refreshPlayUrlIfStale(
+        _videoPlayerController?.state.position ?? Duration.zero,
+        pause: false,
+      );
     }
   }
 
@@ -928,8 +997,51 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       'video-rotate': ?rotate?.toString(),
     };
 
+    final generation = ++_ripperGeneration;
+    _ripperProxy?.close();
+    _ripperProxy = null;
     String video = dataSource.videoSource;
-    if (dataSource.audioSource case final audio? when (audio.isNotEmpty)) {
+    String? audioSource = dataSource.audioSource;
+    if (!isLive &&
+        dataSource is NetworkSource &&
+        dataSource.videoCandidates?.isNotEmpty == true &&
+        Pref.threadRipperEnabled) {
+      final proxy = RipperRangeProxy(
+        concurrency: Pref.threadRipperConcurrency,
+        overseas: Pref.threadRipperOverseas,
+        customHosts: Pref.threadRipperCustomHosts,
+        autoConcurrency: Pref.threadRipperAutoConcurrency
+            ? _ripperAutoConcurrency
+            : null,
+        userAgent: BrowserUa.pc,
+        onRefused: () {
+          if (generation == _ripperGeneration) _onPlayUrlRefused();
+        },
+      );
+      _ripperProxy = proxy;
+      try {
+        await proxy.start();
+        if (generation != _ripperGeneration || _playerCount == 0) {
+          proxy.close();
+          return;
+        }
+        video = proxy.register(dataSource.videoCandidates!);
+        if (audioSource?.isNotEmpty == true &&
+            dataSource.audioCandidates?.isNotEmpty == true) {
+          audioSource = proxy.register(
+            dataSource.audioCandidates!,
+            isAudio: true,
+          );
+        }
+      } catch (_) {
+        proxy.close();
+        if (generation != _ripperGeneration || _playerCount == 0) return;
+        _ripperProxy = null;
+        video = dataSource.videoSource;
+        audioSource = dataSource.audioSource;
+      }
+    }
+    if (audioSource case final audio? when (audio.isNotEmpty)) {
       if (onlyPlayAudio.value) {
         video = audio;
       } else {
@@ -947,6 +1059,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
 
     assert(!isLive || seekTo == null);
+    _ripperRestarting = true;
     await player.open(
       Media(
         video,
@@ -964,6 +1077,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     if (_videoPlayerController case final ctr? when (ctr.current.isNotEmpty)) {
       var media = ctr.current.last;
       if (!isLive) media = media.copyWith(start: ctr.state.position);
+      _ripperRestarting = true;
       return ctr.open(media, play: true);
     }
     return null;
@@ -1076,6 +1190,11 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
       /// position
       stream.position.listen((Duration position) {
+        _ripperProxy?.autoConcurrency?.buffer(
+          (player.state.buffer - position).inMilliseconds / 1000,
+          player.state.playing && !_ripperRestarting,
+          cacheFull: () => player.getProperty('demuxer-cache-idle') == 'yes',
+        );
         final posInSeconds = position.inSeconds;
 
         if (posInSeconds != this.position.value) {
@@ -1100,6 +1219,14 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         buffered.value = buffer.inSeconds;
       }),
       stream.buffering.listen((bool buffering) {
+        if (buffering &&
+            !isBuffering.value &&
+            !_ripperRestarting &&
+            player.state.playing &&
+            player.state.position > Duration.zero) {
+          _ripperProxy?.autoConcurrency?.stall();
+        }
+        if (!buffering) _ripperRestarting = false;
         isBuffering.value = buffering;
         if (!playerStatus.isCompleted) {
           _stopWakeLockTimer();
@@ -1131,6 +1258,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           return;
         }
         if (event.startsWith("Failed to open https://") ||
+            // thread-ripper serves DASH through its loopback proxy
+            event.startsWith("Failed to open http://127.0.0.1:") ||
             event.startsWith("Can not open external file https://") ||
             //tcp: ffurl_read returned 0xdfb9b0bb
             //tcp: ffurl_read returned 0xffffff99
@@ -1182,10 +1311,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   /// 跳转至指定位置
   Future<void> seekTo(Duration position) async {
     if (_playerCount == 0) return;
+    // A seek outside the buffer needs new requests. When paused, play() does.
+    if (playerStatus.isPlaying && _refreshPlayUrlIfStale(position)) return;
 
     _heartDuration = position.inSeconds;
 
     danmakuController?.clear();
+    _ripperRestarting = true;
     try {
       await _videoPlayerController?.seek(position);
       _updateIOSPip(position);
@@ -1220,6 +1352,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     if (_playerCount == 0) return;
     // 播放时自动隐藏控制条
     if (hideControls) controls = false;
+    if (_refreshPlayUrlIfStale(
+      repeat
+          ? Duration.zero
+          : _videoPlayerController?.state.position ?? Duration.zero,
+    )) {
+      return;
+    }
     // repeat为true，将从头播放
     if (repeat) {
       await seekTo(Duration.zero);
@@ -1372,6 +1511,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   // 双击播放、暂停
   Future<void> onDoubleTapCenter() async {
     if (!isLive && isCompleted) {
+      if (_refreshPlayUrlIfStale(Duration.zero)) return;
       await videoPlayerController!.seek(Duration.zero);
       await videoPlayerController!.play();
     } else if (videoPlayerController!.state.playing) {
@@ -1652,6 +1792,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
 
     _playerCount = 0;
+    _ripperGeneration++;
+    _ripperProxy?.close();
+    _ripperProxy = null;
     if (removeSafeArea) {
       showSystemBar();
     }
