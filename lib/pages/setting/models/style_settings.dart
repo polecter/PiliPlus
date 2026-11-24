@@ -21,6 +21,7 @@ import 'package:PiliPlus/models/common/mine_tab_type.dart';
 import 'package:PiliPlus/models/common/mine_shortcut_type.dart';
 import 'package:PiliPlus/models/common/msg/msg_unread_type.dart';
 import 'package:PiliPlus/models/common/nav_bar_config.dart';
+import 'package:PiliPlus/models/common/sidebar_shortcut_type.dart';
 import 'package:PiliPlus/models/common/theme/theme_color_type.dart';
 import 'package:PiliPlus/models/common/theme/theme_type.dart';
 import 'package:PiliPlus/pages/main/controller.dart';
@@ -92,6 +93,14 @@ List<SettingsModel> get styleSettings => [
     setKey: SettingBoxKey.hideSideBarLabel,
     defaultVal: false,
     needReboot: true,
+  ),
+  NormalModel(
+    title: '侧边栏快捷入口',
+    getSubtitle: () => Pref.sidebarShortcuts.isEmpty
+        ? '不显示快捷入口'
+        : '显示：${Pref.sidebarShortcuts.map((item) => item.label).join('、')}',
+    leading: const Icon(Icons.view_sidebar_outlined),
+    onTap: _showSidebarShortcutsDialog,
   ),
   NormalModel(
     title: 'App字体设置',
@@ -421,11 +430,11 @@ List<SettingsModel> get styleSettings => [
       arguments: {
         'key': SettingBoxKey.navBarSort,
         'defaultBars': NavigationBarType.values,
-        'title': 'Navbar',
+        'title': '主页导航',
       },
     ),
-    title: 'Navbar编辑',
-    subtitle: '删除或调换Navbar',
+    title: '主页导航项目',
+    subtitle: '调整侧边栏底部或底栏的首页、动态、我的',
     leading: const Icon(Icons.toc_outlined),
   ),
   SwitchModel(
@@ -947,6 +956,29 @@ Future<void> _showMineShortcutsDialog(
   );
   if (Get.isRegistered<MineController>()) {
     Get.find<MineController>().shortcuts.assignAll(result);
+  }
+  setState();
+}
+
+Future<void> _showSidebarShortcutsDialog(
+  BuildContext context,
+  VoidCallback setState,
+) async {
+  final result = await showDialog<List<SidebarShortcutType>>(
+    context: context,
+    builder: (context) => OrderedMultiSelectDialog<SidebarShortcutType>(
+      title: const Text('侧边栏快捷入口'),
+      initValues: Pref.sidebarShortcuts,
+      values: {for (final item in SidebarShortcutType.values) item: item.label},
+    ),
+  );
+  if (result == null) return;
+  await GStorage.setting.put(
+    SettingBoxKey.sidebarShortcuts,
+    result.map((item) => item.index).toList(),
+  );
+  if (Get.isRegistered<MainController>()) {
+    Get.find<MainController>().sidebarShortcuts.assignAll(result);
   }
   setState();
 }
