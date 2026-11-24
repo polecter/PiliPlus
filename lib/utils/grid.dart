@@ -86,6 +86,25 @@ class SliverGridDelegateWithExtentAndRatio extends SliverGridDelegate {
   SliverGridLayout? layoutCache;
   double? crossAxisExtentCache;
 
+  int crossAxisCountFor(double crossAxisExtent) => max(
+    1,
+    (crossAxisExtent / (maxCrossAxisExtent + crossAxisSpacing)).ceil(),
+  );
+
+  /// Number of complete card rows visible in the scroll viewport.
+  int visibleItemCountFor(
+    SliverConstraints constraints, {
+    double topPadding = 0,
+  }) {
+    final layout = getLayout(constraints) as SliverGridRegularTileLayout;
+    final available = max(0.0, constraints.viewportMainAxisExtent - topPadding);
+    final rows = max(
+      1,
+      ((available + mainAxisSpacing) / layout.mainAxisStride).floor(),
+    );
+    return rows * layout.crossAxisCount;
+  }
+
   @override
   SliverGridLayout getLayout(SliverConstraints constraints) {
     // invoked before each frame
@@ -97,11 +116,7 @@ class SliverGridDelegateWithExtentAndRatio extends SliverGridDelegate {
     crossAxisExtentCache = constraints.crossAxisExtent;
     // Ensure a minimum count of 1, can be zero and result in an infinite extent
     // below when the window size is 0.
-    final crossAxisCount = max(
-      1,
-      (constraints.crossAxisExtent / (maxCrossAxisExtent + crossAxisSpacing))
-          .ceil(),
-    );
+    final crossAxisCount = crossAxisCountFor(constraints.crossAxisExtent);
     final double usableCrossAxisExtent = max(
       0.0,
       constraints.crossAxisExtent - crossAxisSpacing * (crossAxisCount - 1),
