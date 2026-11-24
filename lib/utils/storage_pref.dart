@@ -10,6 +10,7 @@ import 'package:PiliPlus/models/common/dynamic/dynamics_type.dart';
 import 'package:PiliPlus/models/common/dynamic/up_panel_position.dart';
 import 'package:PiliPlus/models/common/follow_order_type.dart';
 import 'package:PiliPlus/models/common/mine_shortcut_type.dart';
+import 'package:PiliPlus/models/common/sidebar_shortcut_type.dart';
 import 'package:PiliPlus/models/common/member/tab_type.dart';
 import 'package:PiliPlus/models/common/mine_tab_type.dart';
 import 'package:PiliPlus/models/common/msg/msg_unread_type.dart';
@@ -1152,6 +1153,17 @@ abstract final class Pref {
         .whereType<int>()
         .where((index) => index >= 0 && index < MineShortcutType.values.length)
         .map((index) => MineShortcutType.values[index])
+        .toSet()
+        .toList();
+  }
+
+  static List<SidebarShortcutType> get sidebarShortcuts {
+    final saved = _setting.get(SettingBoxKey.sidebarShortcuts);
+    if (saved is! List) return SidebarShortcutType.kDefault;
+    return saved
+        .whereType<int>()
+        .where((index) => index >= 0 && index < SidebarShortcutType.values.length)
+        .map((index) => SidebarShortcutType.values[index])
         .toSet()
         .toList();
   }

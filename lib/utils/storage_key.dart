@@ -169,6 +169,7 @@ abstract final class SettingBoxKey {
       enableEmoteTooltip = 'enableEmoteTooltip',
       mineTabs = 'mineTabs',
       mineShortcuts = 'mineShortcuts',
+      sidebarShortcuts = 'sidebarShortcuts',
       enableInAppPip = 'enableInAppPip',
       buvid = 'buvid',
       blockAtOnlyReply = 'blockAtOnlyReply',
