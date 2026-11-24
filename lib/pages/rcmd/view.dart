@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:PiliPlus/common/skeleton/video_card_v.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
@@ -44,8 +46,23 @@ class _RcmdPageState extends State<RcmdPage>
           slivers: [
             SliverPadding(
               padding: const .only(top: Style.cardSpace, bottom: 100),
-              sliver: Obx(
-                () => _buildBody(controller.loadingState.value),
+              sliver: SliverLayoutBuilder(
+                builder: (context, constraints) {
+                  if (controller.updateLayout(
+                    gridDelegate.crossAxisCountFor(constraints.crossAxisExtent),
+                    gridDelegate.visibleItemCountFor(
+                      constraints,
+                      topPadding: Style.cardSpace,
+                    ),
+                  )) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) {
+                        unawaited(controller.reconcileCurrentScreen());
+                      }
+                    });
+                  }
+                  return Obx(() => _buildBody(controller.loadingState.value));
+                },
               ),
             ),
           ],
@@ -114,13 +131,17 @@ class _RcmdPageState extends State<RcmdPage>
             controller.loadingState
               ..value.data!.removeAt(actualIndex)
               ..refresh();
+            unawaited(controller.reconcileCurrentScreen());
           },
         );
       },
     );
 
     final boundary = controller.lastRefreshAt;
-    if (boundary == null || boundary < 0 || boundary > response.length) {
+    if (boundary == null ||
+        boundary < 0 ||
+        boundary > response.length ||
+        boundary % controller.columnCount != 0) {
       return buildGrid(0, response.length);
     }
 
