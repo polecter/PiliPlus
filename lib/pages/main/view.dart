@@ -251,7 +251,14 @@ class _MainAppState extends PopScopeState<MainApp>
                       (_mainController.hideSideBarLabel ? 80 : 130) +
                       _padding.left,
                 ),
-                child: Column(
+                // MainLayout constrains the sidebar's height but leaves its
+                // width unbounded. Give the Column a finite width before its
+                // Align and LayoutBuilder descendants are laid out.
+                child: SizedBox(
+                  width:
+                      (_mainController.hideSideBarLabel ? 80 : 130) +
+                      _padding.left,
+                  child: Column(
                   children: [
                     userAndSearchVertical(),
                     Expanded(
@@ -290,6 +297,7 @@ class _MainAppState extends PopScopeState<MainApp>
                       ),
                     ),
                   ],
+                  ),
                 ),
               ),
             ),
