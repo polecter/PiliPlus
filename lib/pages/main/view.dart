@@ -1,13 +1,14 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:PiliPlus/common/style.dart';
-import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/floating_navigation_bar.dart';
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/main_layout.dart';
 import 'package:PiliPlus/common/widgets/route_aware_mixin.dart';
 import 'package:PiliPlus/models/common/nav_bar_config.dart';
+import 'package:PiliPlus/models/common/sidebar_shortcut_type.dart';
 import 'package:PiliPlus/pages/home/view.dart';
 import 'package:PiliPlus/pages/main/controller.dart';
 import 'package:PiliPlus/utils/android/bindings.g.dart';
@@ -239,7 +240,7 @@ class _MainAppState extends PopScopeState<MainApp>
     if (_mainController.navigationBars.length > 1) {
       if (MediaQuery.isTabletOf(context) && _mainController.optTabletNav) {
         return Padding(
-          padding: const .only(top: 25),
+          padding: EdgeInsets.only(top: 25, bottom: _padding.bottom + 8),
           child: MediaQuery.removePadding(
             context: context,
             removeRight: true,
@@ -250,38 +251,45 @@ class _MainAppState extends PopScopeState<MainApp>
                       (_mainController.hideSideBarLabel ? 80 : 130) +
                       _padding.left,
                 ),
-                child: NavigationDrawer(
-                  /// apply `lib/scripts/navigation_drawer.patch`
-                  flex: 5,
-                  backgroundColor: Colors.transparent,
-                  onDestinationSelected: _mainController.setIndex,
-                  selectedIndex: _mainController.selectedIndex.value,
-                  header: Expanded(flex: 4, child: userAndSearchVertical()),
-                  tilePadding: const .symmetric(vertical: 5, horizontal: 12),
-                  indicatorShape: _mainController.hideSideBarLabel
-                      ? const RoundedRectangleBorder(
-                          borderRadius: .all(.circular(12)),
-                        )
-                      : const RoundedRectangleBorder(
-                          borderRadius: .all(.circular(16)),
-                        ),
-                  children: _mainController.navigationBars
-                      .map(
-                        (e) => NavigationDrawerDestination(
-                          label: _mainController.hideSideBarLabel
-                              ? Semantics(
-                                  label: e.label,
-                                  child: const SizedBox.shrink(),
-                                )
-                              : Text(e.label),
-                          icon: _buildIcon(type: e),
-                          selectedIcon: _buildIcon(
-                            type: e,
-                            selected: true,
+                child: Column(
+                  children: [
+                    userAndSearchVertical(),
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) => Align(
+                          alignment: Alignment.bottomCenter,
+                          child: SizedBox(
+                            height: math.min(
+                              constraints.maxHeight,
+                              _mainController.navigationBars.length * 74.0 + 16,
+                            ),
+                            child: NavigationDrawer(
+                              backgroundColor: Colors.transparent,
+                              onDestinationSelected: _mainController.setIndex,
+                              selectedIndex: _mainController.selectedIndex.value,
+                              tilePadding: const .symmetric(vertical: 5, horizontal: 12),
+                              indicatorShape: _mainController.hideSideBarLabel
+                                  ? const RoundedRectangleBorder(
+                                      borderRadius: .all(.circular(12)),
+                                    )
+                                  : const RoundedRectangleBorder(
+                                      borderRadius: .all(.circular(16)),
+                                    ),
+                              children: _mainController.navigationBars
+                                  .map((e) => NavigationDrawerDestination(
+                                        label: _mainController.hideSideBarLabel
+                                            ? Semantics(label: e.label, child: const SizedBox.shrink())
+                                            : Text(e.label),
+                                        icon: _buildIcon(type: e),
+                                        selectedIcon: _buildIcon(type: e, selected: true),
+                                      ))
+                                  .toList(),
+                            ),
                           ),
                         ),
-                      )
-                      .toList(),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -409,27 +417,28 @@ class _MainAppState extends PopScopeState<MainApp>
       children: [
         userAvatar(colorScheme: _colorScheme, mainController: _mainController),
         const SizedBox(height: 8),
-        msgBadge(_mainController),
-        IconButton(
-          tooltip: '搜索',
-          icon: const Icon(
-            Icons.search_outlined,
-            semanticLabel: '搜索',
-          ),
-          onPressed: () => Get.toNamed('/search'),
-        ),
-        IconButton(
-          tooltip: '观看记录',
-          icon: const Icon(
-            CustomIcons.history,
-            semanticLabel: '观看记录',
-          ),
-          onPressed: () {
-            if (_mainController.accountService.isLogin.value) {
-              Get.toNamed('/history');
-            }
-          },
-        ),
+        Obx(() => Column(
+          children: _mainController.sidebarShortcuts
+              .map((shortcut) => shortcut == SidebarShortcutType.messages
+                  ? msgBadge(_mainController)
+                  : IconButton(
+                      tooltip: shortcut.label,
+                      icon: Icon(shortcut.icon, semanticLabel: shortcut.label),
+                      onPressed: () {
+                        if (shortcut == SidebarShortcutType.search) {
+                          Get.toNamed('/search');
+                        } else if (_mainController.accountService.isLogin.value) {
+                          Get.toNamed(switch (shortcut) {
+                            SidebarShortcutType.history => '/history',
+                            SidebarShortcutType.later => '/later',
+                            SidebarShortcutType.favorite => '/fav',
+                            _ => '/search',
+                          });
+                        }
+                      },
+                    ))
+              .toList(),
+        )),
       ],
     );
   }
