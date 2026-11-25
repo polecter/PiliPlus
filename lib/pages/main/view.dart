@@ -73,9 +73,6 @@ class _MainAppState extends PopScopeState<MainApp>
         );
       }
     }
-    if (!_mainController.useSideBar) {
-      _mainController.isPortrait = MediaQuery.isPortraitOf(context);
-    }
   }
 
   @override
