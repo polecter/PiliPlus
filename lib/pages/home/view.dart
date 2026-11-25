@@ -2,6 +2,7 @@ import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/custom_height_widget.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show tabBarView;
+import 'package:PiliPlus/models/common/sidebar_shortcut_type.dart';
 import 'package:PiliPlus/pages/common/common_page.dart';
 import 'package:PiliPlus/pages/home/controller.dart';
 import 'package:PiliPlus/pages/main/controller.dart';
@@ -93,14 +94,65 @@ class _HomePageState extends CommonPageState<HomePage>
 
   Widget customAppBar() {
     const padding = EdgeInsets.fromLTRB(14, 6, 14, 0);
-    final child = Row(
-      children: [
-        searchBar(),
-        const SizedBox(width: 4),
-        msgBadge(_mainController),
-        const SizedBox(width: 8),
-        userAvatar(colorScheme: _colorScheme, mainController: _mainController),
-      ],
+    final child = Obx(
+      () {
+        final shortcuts = _mainController.sidebarShortcuts.toList();
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 480;
+            Widget shortcutButton(SidebarShortcutType shortcut) =>
+                shortcut == .messages
+                    ? msgBadge(_mainController)
+                    : IconButton(
+                        tooltip: shortcut.label,
+                        icon: Icon(shortcut.icon),
+                        onPressed: () {
+                          if (shortcut == .search) {
+                            Get.toNamed('/search');
+                          } else if (_mainController.accountService.isLogin.value) {
+                            Get.toNamed(switch (shortcut) {
+                              SidebarShortcutType.history => '/history',
+                              SidebarShortcutType.later => '/later',
+                              SidebarShortcutType.favorite => '/fav',
+                              _ => '/search',
+                            });
+                          }
+                        },
+                      );
+
+            final actions = [
+              for (final shortcut in shortcuts) ...[
+                if (shortcut == .search && !compact)
+                  searchBar()
+                else
+                  shortcutButton(shortcut),
+                const SizedBox(width: 4),
+              ],
+            ];
+            return Row(
+              children: [
+                if (compact)
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(children: actions),
+                    ),
+                  )
+                else ...[
+                  ...actions,
+                  if (!shortcuts.contains(SidebarShortcutType.search))
+                    const Spacer(),
+                ],
+                const SizedBox(width: 4),
+                userAvatar(
+                  colorScheme: _colorScheme,
+                  mainController: _mainController,
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
     if (_homeController.hideTopBar) {
       if (_mainController.barOffset case final barOffset?) {
