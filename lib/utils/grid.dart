@@ -91,7 +91,8 @@ class SliverGridDelegateWithExtentAndRatio extends SliverGridDelegate {
     (crossAxisExtent / (maxCrossAxisExtent + crossAxisSpacing)).ceil(),
   );
 
-  /// Number of complete card rows visible in the scroll viewport.
+  /// Include the last partially visible row so a refresh covers every card
+  /// already on screen, while keeping the boundary aligned to a full row.
   int visibleItemCountFor(
     SliverConstraints constraints, {
     double topPadding = 0,
@@ -100,7 +101,7 @@ class SliverGridDelegateWithExtentAndRatio extends SliverGridDelegate {
     final available = max(0.0, constraints.viewportMainAxisExtent - topPadding);
     final rows = max(
       1,
-      ((available + mainAxisSpacing) / layout.mainAxisStride).floor(),
+      ((available + mainAxisSpacing) / layout.mainAxisStride).ceil(),
     );
     return rows * layout.crossAxisCount;
   }
