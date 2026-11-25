@@ -95,7 +95,7 @@ List<SettingsModel> get styleSettings => [
     needReboot: true,
   ),
   NormalModel(
-    title: '侧边栏快捷入口',
+    title: '导航快捷入口',
     getSubtitle: () => Pref.sidebarShortcuts.isEmpty
         ? '不显示快捷入口'
         : '显示：${Pref.sidebarShortcuts.map((item) => item.label).join('、')}',
@@ -967,7 +967,7 @@ Future<void> _showSidebarShortcutsDialog(
   final result = await showDialog<List<SidebarShortcutType>>(
     context: context,
     builder: (context) => OrderedMultiSelectDialog<SidebarShortcutType>(
-      title: const Text('侧边栏快捷入口'),
+      title: const Text('导航快捷入口'),
       initValues: Pref.sidebarShortcuts,
       values: {for (final item in SidebarShortcutType.values) item: item.label},
     ),
