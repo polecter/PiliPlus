@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/custom_height_widget.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -99,7 +101,6 @@ class _HomePageState extends CommonPageState<HomePage>
         final shortcuts = _mainController.sidebarShortcuts.toList();
         return LayoutBuilder(
           builder: (context, constraints) {
-            final compact = constraints.maxWidth < 480;
             Widget shortcutButton(SidebarShortcutType shortcut) =>
                 shortcut == .messages
                     ? msgBadge(_mainController)
@@ -120,29 +121,47 @@ class _HomePageState extends CommonPageState<HomePage>
                         },
                       );
 
-            final actions = [
-              for (final shortcut in shortcuts) ...[
-                if (shortcut == .search && !compact)
-                  searchBar()
-                else
-                  shortcutButton(shortcut),
-                const SizedBox(width: 4),
-              ],
-            ];
+            Widget shortcutStrip(List<SidebarShortcutType> items, double width) =>
+                SizedBox(
+                  width: width,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final shortcut in items) ...[
+                          shortcutButton(shortcut),
+                          const SizedBox(width: 4),
+                        ],
+                      ],
+                    ),
+                  ),
+                );
+
+            final searchAt = shortcuts.indexOf(SidebarShortcutType.search);
+            final before = searchAt < 0
+                ? shortcuts
+                : shortcuts.sublist(0, searchAt);
+            final after = searchAt < 0
+                ? <SidebarShortcutType>[]
+                : shortcuts.sublist(searchAt + 1);
+            // Reserve room for the original search field and the avatar.
+            // Extra shortcuts stay in their configured order and can scroll.
+            final actionSpace = searchAt < 0
+                ? math.max(0.0, constraints.maxWidth - 50)
+                : math.max(0.0, constraints.maxWidth - 50 - 200);
+            final beforeWidth = math.min(before.length * 52.0, actionSpace);
+            final afterWidth = math.min(
+              after.length * 52.0,
+              actionSpace - beforeWidth,
+            );
             return Row(
               children: [
-                if (compact)
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(children: actions),
-                    ),
-                  )
-                else ...[
-                  ...actions,
-                  if (!shortcuts.contains(SidebarShortcutType.search))
-                    const Spacer(),
-                ],
+                shortcutStrip(before, beforeWidth),
+                if (searchAt >= 0) ...[
+                  searchBar(),
+                  shortcutStrip(after, afterWidth),
+                ] else
+                  const Spacer(),
                 const SizedBox(width: 4),
                 userAvatar(
                   colorScheme: _colorScheme,
