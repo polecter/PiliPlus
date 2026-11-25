@@ -244,8 +244,10 @@ class _MainAppState extends PopScopeState<MainApp>
           child: MediaQuery.removePadding(
             context: context,
             removeRight: true,
-            child: Obx(
-              () => DrawerTheme(
+            child: Obx(() {
+              // Read the Rx in this builder, not in LayoutBuilder below.
+              final selectedIndex = _mainController.selectedIndex.value;
+              return DrawerTheme(
                 data: DrawerThemeData(
                   width:
                       (_mainController.hideSideBarLabel ? 80 : 130) +
@@ -273,7 +275,7 @@ class _MainAppState extends PopScopeState<MainApp>
                             child: NavigationDrawer(
                               backgroundColor: Colors.transparent,
                               onDestinationSelected: _mainController.setIndex,
-                              selectedIndex: _mainController.selectedIndex.value,
+                              selectedIndex: selectedIndex,
                               tilePadding: const .symmetric(vertical: 5, horizontal: 12),
                               indicatorShape: _mainController.hideSideBarLabel
                                   ? const RoundedRectangleBorder(
@@ -299,8 +301,8 @@ class _MainAppState extends PopScopeState<MainApp>
                   ],
                   ),
                 ),
-              ),
-            ),
+              );
+            }),
           ),
         );
       }
