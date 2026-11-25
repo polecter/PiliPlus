@@ -19,7 +19,7 @@ SliverConstraints _constraints(double width, double height) =>
     );
 
 void main() {
-  test('refresh capacity follows the actual card columns and complete rows', () {
+  test('refresh capacity includes partially visible rows at each card width', () {
     SliverGridDelegateWithExtentAndRatio delegate(double maxWidth) =>
         SliverGridDelegateWithExtentAndRatio(
           maxCrossAxisExtent: maxWidth,
@@ -34,12 +34,20 @@ void main() {
     final defaultCards = delegate(240);
 
     expect(wideCards.crossAxisCountFor(1150), 4);
-    expect(wideCards.visibleItemCountFor(constraints, topPadding: 8), 12);
+    expect(wideCards.visibleItemCountFor(constraints, topPadding: 8), 16);
     expect(defaultCards.crossAxisCountFor(1150), 5);
-    expect(defaultCards.visibleItemCountFor(constraints, topPadding: 8), 15);
+    expect(defaultCards.visibleItemCountFor(constraints, topPadding: 8), 20);
     expect(
       defaultCards.visibleItemCountFor(_constraints(1150, 560), topPadding: 8),
-      10,
+      15,
+    );
+    expect(
+      wideCards.visibleItemCountFor(_constraints(1150, 560), topPadding: 8),
+      12,
+    );
+    expect(
+      wideCards.visibleItemCountFor(_constraints(1150, 460), topPadding: 8),
+      8,
     );
   });
 }
