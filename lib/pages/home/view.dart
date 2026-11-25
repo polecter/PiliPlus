@@ -76,7 +76,7 @@ class _HomePageState extends CommonPageState<HomePage>
     }
     return Column(
       children: [
-        if (!_mainController.useSideBar && MediaQuery.isPortraitOf(context))
+        if (!_mainController.useSideBar)
           customAppBar(),
         tabBar,
         Expanded(
